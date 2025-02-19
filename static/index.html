@@ -1,37 +1,254 @@
+<!DOCTYPE html>
 <html>
 <head>
-    <!-- Importing d3 library -->
+    <title>US Purchasing Power Heatmap</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://d3js.org/topojson.v3.min.js"></script>
-    
-    <!-- Need styles if I do graphs -->
-    <style>
-        .gridlines line {
-          stroke: #bbb;
-        }
-        
-        .gridlines .domain {
-          stroke: none;
-        }
-        
-        .neighborhood {
-          fill: lightgrey;
-          stroke: white;
-          stroke-width: 1px;
-        }
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 
-        .outline {
-          stroke: #fff;
-          stroke-width: 1px;
-          fill: none;
+    <style>
+        body {
+            font-family: "Instrument Serif", serif;
+            font-weight: 400;
+            font-style: normal;
+            color: black;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 70%;
+            height: 100%;
+            margin: auto;
+            background-color: white;
+        }
+        #tooltip {
+            position: absolute;
+            background-color: white;
+            padding: 8px;
+            border: 1px solid black;
+            border-radius: 4px;
+            font-size: 14px;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        #heatmapdiv {
+            width: 100%;
+            max-width: 960px;
+            margin: auto;
+        }
+        .legend {
+            font-size: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .legend rect {
+            width: 20px;
+            height: 20px;
+            margin-right: 5px;
+        }
+        #slider-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+        }
+        #yearSlider {
+            width: 300px;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 8px;
+            background: #ddd;
+            outline: none;
+            opacity: 0.8;
+            transition: opacity .15s ease-in-out;
+        }
+        #yearSlider:hover {
+            opacity: 1;
+        }
+        #yearSlider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: black;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        #yearSlider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: black;
+            cursor: pointer;
+            border-radius: 50%;
         }
     </style>
 </head>
 <body>
-    <div>
-    <h1>
-      Hello World!!
-    </h1>
+    <h1>US Purchasing Power Heatmap</h1>
+    <p>This heatmap visualizes the purchasing power of different U.S. states for various goods over time. Purchasing power reflects how much of a specific item can be bought with 1 hour of minimum wage, considering different wage regulations. Darker shades indicate higher purchasing power, meaning goods are relatively more affordable in those states, while lighter shades indicate lower purchasing power, reflecting higher relative costs</p>
+    <label for="itemDropdown">Select Item:</label>
+    <select id="itemDropdown"></select>
+
+    <div id="slider-container">
+        <label for="yearSlider">Year:</label>
+        <input type="range" id="yearSlider" min="2005" max="2025" value="2005">
+        <span id="sliderLabel">2005</span>
     </div>
+
+    <div id="heatmapdiv"></div>
+    <div id="legend"></div>
+    <div id="tooltip"></div>
+
+    <script>
+        const heatmargin = {top: 10, right: 10, bottom: 10, left: 10};
+        const heatwidth = 960 - heatmargin.left - heatmargin.right;
+        const heatheight = 700 - heatmargin.top - heatmargin.bottom;
+
+        const legendSvg = d3.select("#legend").append("svg")
+            .attr("width", 300)
+            .attr("height", 100);
+
+        const legendScale = d3.scaleLinear()
+            .domain([0, 1])
+            .range([20, 280]);
+
+        const legendAxis = d3.axisBottom(legendScale)
+            .ticks(5);
+
+        const legendGradient = legendSvg.append("defs").append("linearGradient")
+            .attr("id", "legendGradient")
+            .attr("x1", "0%")
+            .attr("y1", "0%")
+            .attr("x2", "100%")
+            .attr("y2", "0%");
+
+        legendGradient.append("stop")
+            .attr("offset", "0%")
+            .attr("stop-color", d3.interpolateBlues(0));
+        legendGradient.append("stop")
+            .attr("offset", "100%")
+            .attr("stop-color", d3.interpolateBlues(1));
+
+        legendSvg.append("rect")
+            .attr("x", 20)
+            .attr("y", 20)
+            .attr("width", 260)
+            .attr("height", 20)
+            .style("fill", "url(#legendGradient)");
+
+        legendSvg.append("g")
+            .attr("transform", "translate(0,40)")
+            .call(legendAxis);
+
+        d3.selectAll(".state")
+            .on("mouseenter", function(event, d) {
+                d3.select("#tooltip")
+                    .style("opacity", 1)
+                    .style("left", `${event.pageX + 10}px`)
+                    .style("top", `${event.pageY + 10}px`)
+                    .html(`${d.properties.name}: Purchasing Power`);
+            })
+            .on("mouseleave", function() {
+                d3.select("#tooltip").style("opacity", 0);
+            });
+
+        const stateIdMap = {
+            1: "AL", 2: "AK", 4: "AZ", 5: "AR", 6: "CA", 8: "CO", 9: "CT",
+            10: "DE", 12: "FL", 13: "GA", 15: "HI", 16: "ID", 17: "IL", 18: "IN",
+            19: "IA", 20: "KS", 21: "KY", 22: "LA", 23: "ME", 24: "MD", 25: "MA",
+            26: "MI", 27: "MN", 28: "MS", 29: "MO", 30: "MT", 31: "NE", 32: "NV",
+            33: "NH", 34: "NJ", 35: "NM", 36: "NY", 37: "NC", 38: "ND", 39: "OH",
+            40: "OK", 41: "OR", 42: "PA", 44: "RI", 45: "SC", 46: "SD", 47: "TN",
+            48: "TX", 49: "UT", 50: "VT", 51: "VA", 53: "WA", 54: "WV", 55: "WI",
+            56: "WY"
+        };
+
+        const heatsvg = d3.select("#heatmapdiv").append("svg")
+            .attr("viewBox", `0 0 ${heatwidth} ${heatheight}`)
+            .attr("preserveAspectRatio", "xMidYMid meet")
+            .append("g")
+            .attr("transform", `translate(${heatmargin.left},${heatmargin.top})`);
+
+        const map = heatsvg.append("g");
+
+        const itemDropdown = d3.select("#itemDropdown")
+            .on("change", function() {
+                updateMap(d3.select("#yearSlider").property("value"), this.value);
+            });
+
+        const slider = d3.select("#yearSlider")
+            .on("input", function() {
+                updateMap(+this.value, d3.select("#itemDropdown").property("value"));
+            });
+
+        let usData, allItems;
+        async function requestHeatData() {
+            usData = await d3.json("us-smaller.json");
+            const data = await d3.json("data.json");
+
+            allItems = [...new Set(data.map(d => d.item))];
+            itemDropdown.selectAll("option")
+                .data(allItems)
+                .enter().append("option")
+                .text(d => d)
+                .attr("value", d => d);
+
+            itemDropdown.property("value", allItems[0]);
+            updateMap(2005, allItems[0]);
+        }
+
+        function updateMap(year, item) {
+            d3.select("#sliderLabel").text(`${year}`);
+            d3.json("data.json").then(data => {
+                const filteredData = data.filter(d => d.item === item && +d.observation_date === year);
+                const stateMilkData = {};
+                filteredData.forEach(d => {
+                    stateMilkData[d.state] = d.purchasing_power;
+                });
+
+                const colorScale = d3.scaleSequential(d3.interpolateBlues)
+                    .domain([d3.min(Object.values(stateMilkData)), d3.max(Object.values(stateMilkData))]);
+
+                map.selectAll("path.state")
+                    .data(topojson.feature(usData, usData.objects.states).features)
+                    .join("path")
+                    .attr("class", "state")
+                    .attr("d", d3.geoPath().projection(d3.geoAlbersUsa().fitSize([heatwidth, heatheight], topojson.feature(usData, usData.objects.states))))
+                    .attr("fill", d => {
+                        const stateAbbreviation = stateIdMap[d.id];
+                        return stateAbbreviation && stateMilkData[stateAbbreviation] 
+                            ? colorScale(stateMilkData[stateAbbreviation]) 
+                            : "#ccc";
+                    })
+                    .attr("stroke", "#fff")
+                    .on("mouseenter", function(event, d) {
+                        const stateAbbreviation = stateIdMap[d.id];
+                        const purchasingPower = stateMilkData[stateAbbreviation] || "No Data";
+                        
+                        d3.select("#tooltip")
+                            .style("visibility", "visible")
+                            .style("left", `${event.pageX + 10}px`)
+                            .style("top", `${event.pageY + 10}px`)
+                            .html(`<strong>${stateAbbreviation}</strong>: ${purchasingPower}`);
+                    })
+                    .on("mousemove", function(event) {
+                        d3.select("#tooltip")
+                            .style("left", `${event.pageX + 10}px`)
+                            .style("top", `${event.pageY + 10}px`);
+                    })
+                    .on("mouseleave", function() {
+                        d3.select("#tooltip").style("visibility", "hidden");
+                    });
+            });
+        }
+
+
+
+        requestHeatData();
+    </script>
 </body>
 </html>
