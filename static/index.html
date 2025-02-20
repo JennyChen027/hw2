@@ -176,9 +176,12 @@
         const map = heatsvg.append("g");
 
         const itemDropdown = d3.select("#itemDropdown")
+            // I changed this to fix bug with viz not updating when dropdown changed
             .on("change", function() {
-                updateMap(d3.select("#yearSlider").property("value"), this.value);
-            });
+                const selectedItem = this.value;
+                const currentYear = +d3.select("#yearSlider").property("value");
+                updateMap(currentYear, selectedItem);
+        });
 
         const slider = d3.select("#yearSlider")
             .on("input", function() {
@@ -245,8 +248,6 @@
                     });
             });
         }
-
-
 
         requestHeatData();
     </script>
