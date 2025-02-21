@@ -201,8 +201,6 @@
                 .call(legendAxis);
         }
 
-
-
         // tooltip
         d3.selectAll(".state")
             .on("mouseenter", function(event, d) {
@@ -211,6 +209,7 @@
                     .style("left", `${event.pageX + 10}px`)
                     .style("top", `${event.pageY + 10}px`)
                     .html(`${d.properties.name}: Purchasing Power`);
+                
             })
             .on("mouseleave", function() {
                 d3.select("#tooltip").style("opacity", 0);
@@ -234,6 +233,12 @@
             .attr("transform", `translate(${heatmargin.left},${heatmargin.top})`);
 
         const map = heatsvg.append("g");
+
+        let selectmesh = map.append("path")
+                            .attr("class", "mouse outline")
+                            .style("stroke", "black")
+                            .style("stroke-width", 3)
+                            .attr("d", "");
 
         const itemDropdown = d3.select("#itemDropdown")
             // I changed this to fix bug with viz not updating when dropdown changed
@@ -294,11 +299,12 @@
                 const colorScale = d3.scaleSequential(d3.interpolateBlues)
                     .domain([d3.min(Object.values(stateMilkData)), d3.max(Object.values(stateMilkData))]);
 
+                var path =  d3.geoPath().projection(d3.geoAlbersUsa().fitSize([heatwidth, heatheight], topojson.feature(usData, usData.objects.states)));
                 map.selectAll("path.state")
                     .data(topojson.feature(usData, usData.objects.states).features)
                     .join("path")
                     .attr("class", "state")
-                    .attr("d", d3.geoPath().projection(d3.geoAlbersUsa().fitSize([heatwidth, heatheight], topojson.feature(usData, usData.objects.states))))
+                    .attr("d", path)
                     .attr("fill", d => {
                         const stateAbbreviation = stateIdMap[d.id];
                         return stateAbbreviation && stateMilkData[stateAbbreviation] 
@@ -310,6 +316,14 @@
                         const stateAbbreviation = stateIdMap[d.id];
                         let purchasingPower = stateMilkData[stateAbbreviation] || "No Data";
                         purchasingPower = purchasingPower ? Math.round(purchasingPower) : "No Data";
+                        let stateID = d.id; 
+
+                        // separate state mesh for highlight
+                        var mo = topojson.mesh(usData, usData.objects.states, function(a,b) { return a.id === stateID || b.id === stateID})
+                        selectmesh.datum(mo)
+                            .attr("d", path)
+                            .attr("fill", "none")
+                            .raise();
 
                         d3.select("#tooltip")
                             .style("visibility", "visible")
@@ -324,9 +338,10 @@
                     })
                     .on("mouseleave", function() {
                         d3.select("#tooltip").style("visibility", "hidden");
+                        selectmesh.attr("d", "");
                     });
                     if (shouldUpdateLegend) {
-                        drawLegend("#legend", colorScale);
+                        //drawLegend("#legend", colorScale);
                     }
 
             });
