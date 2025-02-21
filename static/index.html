@@ -88,7 +88,7 @@
     </style>
 </head>
 <body>
-    <h1>US Purchasing Power Heatmap</h1>
+    <h1></h1>
     <p>This heatmap visualizes the purchasing power of different U.S. states for various goods over time. Purchasing power reflects how much of a specific item can be bought with 1 hour of minimum wage, considering different wage regulations. Darker shades indicate higher purchasing power, meaning goods are relatively more affordable in those states, while lighter shades indicate lower purchasing power, reflecting higher relative costs</p>
     <label for="itemDropdown">Select Item:</label>
     <select id="itemDropdown"></select>
@@ -107,43 +107,103 @@
         const heatmargin = {top: 10, right: 10, bottom: 10, left: 10};
         const heatwidth = 960 - heatmargin.left - heatmargin.right;
         const heatheight = 700 - heatmargin.top - heatmargin.bottom;
+        let globalMinMax = {}
 
-        const legendSvg = d3.select("#legend").append("svg")
-            .attr("width", 300)
-            .attr("height", 100);
 
-        const legendScale = d3.scaleLinear()
-            .domain([0, 1])
-            .range([20, 280]);
+        // code to make title and drop down have better readability
+        //simplify names for easier readability
+        function simplifyItemName(item) {
+        const nameMap = {
+            "bananas,_per_lb.": "bananas (lbs)",
+            "oranges,_navel,_per_lb.": "oranges (lbs)",
+            "bread,_white,_pan,_per_lb.": "bread (lbs)",
+            "tomatoes,_field_grown,_per_lb.": "tomatoes (lbs)",
+            "chicken,_fresh,_whole,_per_lb.": "chicken (lbs)",
+            "electricity_per_kwh": "electricity (kWh)",
+            "eggs,_grade_a,_large,_per_doz.": "eggs (dozen)",
+            "gasoline,_unleaded_regular,_per_gallon": "gasoline (gallon)",
+            "ground_chuck,_100%_beef,_per_lb.": "ground chuck (lbs)",
+            "utility_(piped)_gas_per_therm": "piped gas (therm)",
+            "milk,_fresh,_whole,_fortified,_per_gal.": "milk (gallon)"
+        };
 
-        const legendAxis = d3.axisBottom(legendScale)
-            .ticks(5);
+        return nameMap[item] || item.replace(/_/g, " ").replace(/, per /g, " (") + ")";
+        }
 
-        const legendGradient = legendSvg.append("defs").append("linearGradient")
-            .attr("id", "legendGradient")
-            .attr("x1", "0%")
-            .attr("y1", "0%")
-            .attr("x2", "100%")
-            .attr("y2", "0%");
+        //change title to use much or many
+        function getQuantityWord(item) {
+            const countableItems = new Set(["bananas", "oranges", "tomatoes", "chicken", "eggs"]);
 
-        legendGradient.append("stop")
-            .attr("offset", "0%")
-            .attr("stop-color", d3.interpolateBlues(0));
-        legendGradient.append("stop")
-            .attr("offset", "100%")
-            .attr("stop-color", d3.interpolateBlues(1));
+            const simplifiedName = simplifyItemName(item).split(" (")[0];
 
-        legendSvg.append("rect")
-            .attr("x", 20)
-            .attr("y", 20)
-            .attr("width", 260)
-            .attr("height", 20)
-            .style("fill", "url(#legendGradient)");
+            return countableItems.has(simplifiedName) ? "many" : "much";
+        }
 
-        legendSvg.append("g")
-            .attr("transform", "translate(0,40)")
-            .call(legendAxis);
+        function updateTitle(item) {
+            const simplifiedName = simplifyItemName(item);
+            const quantityWord = getQuantityWord(item);
+            d3.select("h1").text(`How ${quantityWord} ${simplifiedName} can you buy with 1 hour of minimum wage?`);
+        }
 
+        //legend
+
+        let shouldUpdateLegend = true;
+        function drawLegend(legendSelector, legendColorScale) {
+            const legendWidth = 300;
+            const legendHeight = 50;
+
+            if (!globalMinMax[item]) return; 
+            const { min, max } = globalMinMax[item]; 
+
+            // Clear previous legend
+            const legend = d3.select(legendSelector)
+                .html("")
+                .append("svg")
+                .attr("width", legendWidth)
+                .attr("height", legendHeight);
+
+            // Ensure the gradient exists and is properly defined
+            const defs = legend.append("defs");
+            const linearGradient = defs.append("linearGradient")
+                .attr("id", "legendGradient")
+                .attr("x1", "0%")
+                .attr("y1", "0%")
+                .attr("x2", "100%")
+                .attr("y2", "0%");
+
+            const legendMinMax = d3.extent(legendColorScale.domain());
+            const numStops = 10;
+            const stepSize = (max - min) / numStops;
+
+            // Remove existing stops before adding new ones (to prevent duplicate stops)
+            linearGradient.selectAll("stop").remove();
+            d3.range(min, max + stepSize, stepSize).forEach((value, i) => {
+                linearGradient.append("stop")
+                    .attr("offset", `${(i / numStops) * 100}%`)
+                    .attr("stop-color", legendColorScale(value));
+            });
+
+            legend.append("rect")
+                .attr("x", 20)
+                .attr("y", 10)
+                .attr("width", legendWidth - 40)
+                .attr("height", 15)
+                .style("fill", "url(#legendGradient)");
+
+            const legendScale = d3.scaleLinear()
+                .domain([min,max])
+                .range([20, legendWidth - 40]);
+
+            const legendAxis = d3.axisBottom(legendScale).ticks(5);
+
+            legend.append("g")
+                .attr("transform", "translate(0,30)")
+                .call(legendAxis);
+        }
+
+
+
+        // tooltip
         d3.selectAll(".state")
             .on("mouseenter", function(event, d) {
                 d3.select("#tooltip")
@@ -178,6 +238,7 @@
         const itemDropdown = d3.select("#itemDropdown")
             // I changed this to fix bug with viz not updating when dropdown changed
             .on("change", function() {
+                shouldUpdateLegend = true;
                 const selectedItem = this.value;
                 const currentYear = +d3.select("#yearSlider").property("value");
                 updateMap(currentYear, selectedItem);
@@ -185,6 +246,7 @@
 
         const slider = d3.select("#yearSlider")
             .on("input", function() {
+                shouldUpdateLegend = false;
                 updateMap(+this.value, d3.select("#itemDropdown").property("value"));
             });
 
@@ -194,18 +256,34 @@
             const data = await d3.json("data.json");
 
             allItems = [...new Set(data.map(d => d.item))];
+                
+            allItems.forEach(item => {
+                const values = data.filter(d => d.item === item)
+                                .map(d => d.purchasing_power)
+                                .filter(v => v !== null && v !== undefined);
+                
+                globalMinMax[item] = {
+                    min: d3.min(values),
+                    max: d3.max(values)
+                };
+            });
+
+
             itemDropdown.selectAll("option")
                 .data(allItems)
                 .enter().append("option")
-                .text(d => d)
+                .text(d => simplifyItemName(d)) 
                 .attr("value", d => d);
 
             itemDropdown.property("value", allItems[0]);
             updateMap(2005, allItems[0]);
         }
 
+        
+
         function updateMap(year, item) {
             d3.select("#sliderLabel").text(`${year}`);
+            updateTitle(item); //dynamic title
             d3.json("data.json").then(data => {
                 const filteredData = data.filter(d => d.item === item && +d.observation_date === year);
                 const stateMilkData = {};
@@ -230,13 +308,14 @@
                     .attr("stroke", "#fff")
                     .on("mouseenter", function(event, d) {
                         const stateAbbreviation = stateIdMap[d.id];
-                        const purchasingPower = stateMilkData[stateAbbreviation] || "No Data";
-                        
+                        let purchasingPower = stateMilkData[stateAbbreviation] || "No Data";
+                        purchasingPower = purchasingPower ? Math.round(purchasingPower) : "No Data";
+
                         d3.select("#tooltip")
                             .style("visibility", "visible")
                             .style("left", `${event.pageX + 10}px`)
                             .style("top", `${event.pageY + 10}px`)
-                            .html(`<strong>${stateAbbreviation}</strong>: ${purchasingPower}`);
+                            .html(`<strong>${stateAbbreviation}</strong>:~ ${purchasingPower}`);
                     })
                     .on("mousemove", function(event) {
                         d3.select("#tooltip")
@@ -246,6 +325,10 @@
                     .on("mouseleave", function() {
                         d3.select("#tooltip").style("visibility", "hidden");
                     });
+                    if (shouldUpdateLegend) {
+                        drawLegend("#legend", colorScale);
+                    }
+
             });
         }
 
