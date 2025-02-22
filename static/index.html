@@ -148,21 +148,22 @@
         //legend
 
         let shouldUpdateLegend = true;
-        function drawLegend(legendSelector, legendColorScale) {
+        function drawLegend(legendSelector, legendColorScale, item) {
             const legendWidth = 300;
             const legendHeight = 50;
 
-            if (!globalMinMax[item]) return; 
-            const { min, max } = globalMinMax[item]; 
+            // Ensure item has min/max data
+            if (!globalMinMax[item]) return;
+            const { min, max } = globalMinMax[item];
 
-            // Clear previous legend
+            // Clear previous legend only if min/max exist
+            d3.select(legendSelector).html("");
+
             const legend = d3.select(legendSelector)
-                .html("")
                 .append("svg")
                 .attr("width", legendWidth)
                 .attr("height", legendHeight);
 
-            // Ensure the gradient exists and is properly defined
             const defs = legend.append("defs");
             const linearGradient = defs.append("linearGradient")
                 .attr("id", "legendGradient")
@@ -171,11 +172,10 @@
                 .attr("x2", "100%")
                 .attr("y2", "0%");
 
-            const legendMinMax = d3.extent(legendColorScale.domain());
+            // Generate gradient stops
             const numStops = 10;
             const stepSize = (max - min) / numStops;
 
-            // Remove existing stops before adding new ones (to prevent duplicate stops)
             linearGradient.selectAll("stop").remove();
             d3.range(min, max + stepSize, stepSize).forEach((value, i) => {
                 linearGradient.append("stop")
@@ -183,6 +183,7 @@
                     .attr("stop-color", legendColorScale(value));
             });
 
+            // Append gradient bar
             legend.append("rect")
                 .attr("x", 20)
                 .attr("y", 10)
@@ -190,8 +191,9 @@
                 .attr("height", 15)
                 .style("fill", "url(#legendGradient)");
 
+            // Define legend scale
             const legendScale = d3.scaleLinear()
-                .domain([min,max])
+                .domain([min, max]) // Use global min/max per item
                 .range([20, legendWidth - 40]);
 
             const legendAxis = d3.axisBottom(legendScale).ticks(5);
@@ -200,6 +202,7 @@
                 .attr("transform", "translate(0,30)")
                 .call(legendAxis);
         }
+
 
         // tooltip
         d3.selectAll(".state")
@@ -264,14 +267,15 @@
                 
             allItems.forEach(item => {
                 const values = data.filter(d => d.item === item)
-                                .map(d => d.purchasing_power)
-                                .filter(v => v !== null && v !== undefined);
-                
+                    .map(d => d.purchasing_power)
+                    .filter(v => v !== null && v !== undefined);
+
                 globalMinMax[item] = {
                     min: d3.min(values),
                     max: d3.max(values)
                 };
             });
+
 
 
             itemDropdown.selectAll("option")
@@ -296,10 +300,14 @@
                     stateMilkData[d.state] = d.purchasing_power;
                 });
 
+                // Ensure color scale uses per-item min/max
+                const { min, max } = globalMinMax[item] || { min: 0, max: 1 };
+
                 const colorScale = d3.scaleSequential(d3.interpolateBlues)
-                    .domain([d3.min(Object.values(stateMilkData)), d3.max(Object.values(stateMilkData))]);
+                    .domain([min, max]);
 
                 var path =  d3.geoPath().projection(d3.geoAlbersUsa().fitSize([heatwidth, heatheight], topojson.feature(usData, usData.objects.states)));
+                
                 map.selectAll("path.state")
                     .data(topojson.feature(usData, usData.objects.states).features)
                     .join("path")
@@ -341,7 +349,7 @@
                         selectmesh.attr("d", "");
                     });
                     if (shouldUpdateLegend) {
-                        //drawLegend("#legend", colorScale);
+                        drawLegend("#legend", colorScale, item);
                     }
 
             });
