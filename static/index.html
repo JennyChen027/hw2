@@ -85,6 +85,41 @@
             cursor: pointer;
             border-radius: 50%;
         }
+
+
+        #main {
+            display: flex;
+            width: 100%;
+            height: auto;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        #heatmap {
+            flex: 70%;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #imagesbox {
+            flex: 30%;
+            min-height: 500px;
+            padding: 20px;
+            border-left: 2px solid black;
+            background: #f8f9fa;
+            overflow-y: auto;
+            text-align: left;
+        }
+
+        #Images img {
+            width: 60px;
+            height: 60px;
+            margin: 4px;
+        }
     </style>
 </head>
 <body>
@@ -99,8 +134,18 @@
         <span id="sliderLabel">2005</span>
     </div>
 
-    <div id="heatmapdiv"></div>
-    <div id="legend"></div>
+    <div id="main">
+        <div id="heatmap">
+            <div id="heatmapdiv"></div>
+            <div id="legend"></div>
+        </div>
+    
+        <div id="imagesbox">
+            <h3 id="title">Hover over a state to see their purchase power!</h3>
+            <div id="Images"></div>
+        </div>
+    </div>
+
     <div id="tooltip"></div>
 
     <script>
@@ -229,6 +274,35 @@
             56: "WY"
         };
 
+        const stateNameMap = {
+            1: "Alabama", 2: "Alaska", 4: "Arizona", 5: "Arkansas", 6: "California", 
+            8: "Colorado", 9: "Connecticut", 10: "Delaware", 12: "Florida", 13: "Georgia", 
+            15: "Hawaii", 16: "Idaho", 17: "Illinois", 18: "Indiana", 19: "Iowa", 
+            20: "Kansas", 21: "Kentucky", 22: "Louisiana", 23: "Maine", 24: "Maryland", 
+            25: "Massachusetts", 26: "Michigan", 27: "Minnesota", 28: "Mississippi", 
+            29: "Missouri", 30: "Montana", 31: "Nebraska", 32: "Nevada", 33: "New Hampshire", 
+            34: "New Jersey", 35: "New Mexico", 36: "New York", 37: "North Carolina", 
+            38: "North Dakota", 39: "Ohio", 40: "Oklahoma", 41: "Oregon", 42: "Pennsylvania", 
+            44: "Rhode Island", 45: "South Carolina", 46: "South Dakota", 47: "Tennessee", 
+            48: "Texas", 49: "Utah", 50: "Vermont", 51: "Virginia", 53: "Washington", 
+            54: "West Virginia", 55: "Wisconsin", 56: "Wyoming"
+        };
+
+        const itemImageMap = {
+            "bananas,_per_lb.": "images/bananas.png",
+            "oranges,_navel,_per_lb.": "images/orange.png",
+            "bread,_white,_pan,_per_lb.": "images/bread.png",
+            "tomatoes,_field_grown,_per_lb.": "images/tomato.png",
+            "chicken,_fresh,_whole,_per_lb.": "images/chicken.png",
+            "electricity_per_kwh": "images/electricity.png",
+            "eggs,_grade_a,_large,_per_doz.": "images/eggs.png",
+            "gasoline,_unleaded_regular,_per_gallon": "images/gasoline.png",
+            "ground_chuck,_100%_beef,_per_lb.": "images/beef.png",
+            "utility_(piped)_gas_per_therm": "images/gas.png",
+            "milk,_fresh,_whole,_fortified,_per_gal.": "images/milk.png"
+        };
+
+
         const heatsvg = d3.select("#heatmapdiv").append("svg")
             .attr("viewBox", `0 0 ${heatwidth} ${heatheight}`)
             .attr("preserveAspectRatio", "xMidYMid meet")
@@ -276,8 +350,6 @@
                 };
             });
 
-
-
             itemDropdown.selectAll("option")
                 .data(allItems)
                 .enter().append("option")
@@ -288,7 +360,22 @@
             updateMap(2005, allItems[0]);
         }
 
-        
+        function updateImages(count, item) {
+            const maxImages = 50; // Prevent excessive rendering
+
+            const container = d3.select("#Images");
+            container.html(""); 
+
+            const imageSrc = itemImageMap[item] || "default.png";
+
+            for (let i = 0; i < count; i++) {
+                container.append("img")
+                    .attr("src", imageSrc) // Ensure this matches the correct file path
+                    .attr("width", "40px")
+                    .attr("height", "40px")
+                    .style("margin", "2px");
+            }
+        }
 
         function updateMap(year, item) {
             d3.select("#sliderLabel").text(`${year}`);
@@ -322,6 +409,9 @@
                     .attr("stroke", "#fff")
                     .on("mouseenter", function(event, d) {
                         const stateAbbreviation = stateIdMap[d.id];
+                        const stateFullName = stateNameMap[d.id];
+                        const selectedItem = d3.select("#itemDropdown").property("value")
+
                         let purchasingPower = stateMilkData[stateAbbreviation] || "No Data";
                         purchasingPower = purchasingPower ? Math.round(purchasingPower) : "No Data";
                         let stateID = d.id; 
@@ -337,7 +427,10 @@
                             .style("visibility", "visible")
                             .style("left", `${event.pageX + 10}px`)
                             .style("top", `${event.pageY + 10}px`)
-                            .html(`<strong>${stateAbbreviation}</strong>:~ ${purchasingPower}`);
+                            .html(`${stateAbbreviation}:~ ${purchasingPower}`);
+
+                            d3.select("h3").html(`Purchase Power of ${stateFullName}:`); 
+                            updateImages(purchasingPower, selectedItem);
                     })
                     .on("mousemove", function(event) {
                         d3.select("#tooltip")
@@ -347,6 +440,9 @@
                     .on("mouseleave", function() {
                         d3.select("#tooltip").style("visibility", "hidden");
                         selectmesh.attr("d", "");
+
+                        d3.select("#Images").html("");
+                        d3.select("h3").html("Hover over a state to see their purchase power!");
                     });
                     if (shouldUpdateLegend) {
                         drawLegend("#legend", colorScale, item);
