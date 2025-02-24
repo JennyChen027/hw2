@@ -142,7 +142,6 @@
     
         <div id="imagesbox">
             <h3 id="title">Hover over a state to see their purchase power!</h3>
-            <div id="Images"></div>
         </div>
     </div>
 
@@ -187,7 +186,11 @@
         function updateTitle(item) {
             const simplifiedName = simplifyItemName(item);
             const quantityWord = getQuantityWord(item);
-            d3.select("h1").text(`How ${quantityWord} ${simplifiedName} can you buy with 1 hour of minimum wage?`);
+            if (item === "electricity_per_kwh") {
+                d3.select("h1").text(`How many dryer loads (cycle) can you run with 1 hour of minimum wage?`);
+            } else {
+                d3.select("h1").text(`How ${quantityWord} ${simplifiedName} can you buy with 1 hour of minimum wage?`);
+    }
         }
 
         //legend
@@ -287,14 +290,14 @@
             48: "Texas", 49: "Utah", 50: "Vermont", 51: "Virginia", 53: "Washington", 
             54: "West Virginia", 55: "Wisconsin", 56: "Wyoming"
         };
-
+        // <a href="https://www.flaticon.com/free-icons/" title="icons">Icons created by Freepik - Flaticon</a>
         const itemImageMap = {
             "bananas,_per_lb.": "images/bananas.png",
             "oranges,_navel,_per_lb.": "images/orange.png",
             "bread,_white,_pan,_per_lb.": "images/bread.png",
             "tomatoes,_field_grown,_per_lb.": "images/tomato.png",
             "chicken,_fresh,_whole,_per_lb.": "images/chicken.png",
-            "electricity_per_kwh": "images/electricity.png",
+            "electricity_per_kwh": "images/dryer.png",
             "eggs,_grade_a,_large,_per_doz.": "images/eggs.png",
             "gasoline,_unleaded_regular,_per_gallon": "images/gasoline.png",
             "ground_chuck,_100%_beef,_per_lb.": "images/beef.png",
@@ -360,17 +363,15 @@
             updateMap(2005, allItems[0]);
         }
 
-        function updateImages(count, item) {
-            const maxImages = 50; // Prevent excessive rendering
+        function updateImages(count, item, container) {
 
-            const container = d3.select("#Images");
             container.html(""); 
 
             const imageSrc = itemImageMap[item] || "default.png";
 
             for (let i = 0; i < count; i++) {
                 container.append("img")
-                    .attr("src", imageSrc) // Ensure this matches the correct file path
+                    .attr("src", imageSrc)
                     .attr("width", "40px")
                     .attr("height", "40px")
                     .style("margin", "2px");
@@ -383,8 +384,12 @@
             d3.json("data.json").then(data => {
                 const filteredData = data.filter(d => d.item === item && +d.observation_date === year);
                 const stateMilkData = {};
+                const minWageData = {};
                 filteredData.forEach(d => {
                     stateMilkData[d.state] = d.purchasing_power;
+                });
+                filteredData.forEach(d => {
+                    minWageData[d.state] = d.min_wage;
                 });
 
                 // Ensure color scale uses per-item min/max
@@ -413,6 +418,14 @@
                         const selectedItem = d3.select("#itemDropdown").property("value")
 
                         let purchasingPower = stateMilkData[stateAbbreviation] || "No Data";
+                        let minWage = minWageData[stateAbbreviation] || "No Data";
+
+                        // convert electrivity to drying cycles
+                        if (selectedItem === "electricity_per_kwh" && purchasingPower) {
+                            const kwhPerDryerCycle = 3;
+                            purchasingPower = Math.floor(purchasingPower / kwhPerDryerCycle);
+                        }
+
                         purchasingPower = purchasingPower ? Math.round(purchasingPower) : "No Data";
                         let stateID = d.id; 
 
@@ -428,9 +441,14 @@
                             .style("left", `${event.pageX + 10}px`)
                             .style("top", `${event.pageY + 10}px`)
                             .html(`${stateAbbreviation}:~ ${purchasingPower}`);
+                        const container = d3.select("#imagesbox");
+                        container.html("");
+                        container.append("h2").text(stateFullName);
+                        container.append("h3").text(`Minimum Wage: $${minWage}`);
+                        container.append("h3").text(`Purchase Power: ${purchasingPower}`);
 
-                            d3.select("h3").html(`Purchase Power of ${stateFullName}:`); 
-                            updateImages(purchasingPower, selectedItem);
+                        const imagesContainer = container.append("div").attr("id", "Images");
+                        updateImages(purchasingPower, selectedItem, imagesContainer);
                     })
                     .on("mousemove", function(event) {
                         d3.select("#tooltip")
@@ -441,8 +459,8 @@
                         d3.select("#tooltip").style("visibility", "hidden");
                         selectmesh.attr("d", "");
 
-                        d3.select("#Images").html("");
-                        d3.select("h3").html("Hover over a state to see their purchase power!");
+                        d3.select("#imagesbox").html("");
+                        d3.select("#imagesbox").append("h3").text("Hover over a state to see their purchase power!");
                     });
                     if (shouldUpdateLegend) {
                         drawLegend("#legend", colorScale, item);
