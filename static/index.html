@@ -107,7 +107,7 @@
 
         #imagesbox {
             flex: 30%;
-            min-height: 500px;
+            min-height: 750px;
             padding: 20px;
             border-left: 2px solid black;
             background: #f8f9fa;
@@ -196,13 +196,13 @@
         //legend
 
         let shouldUpdateLegend = true;
-        function drawLegend(legendSelector, legendColorScale, item) {
+        function drawLegend(legendSelector, legendColorScale, min, max, item) {
             const legendWidth = 300;
             const legendHeight = 50;
 
-            // Ensure item has min/max data
-            if (!globalMinMax[item]) return;
-            const { min, max } = globalMinMax[item];
+            // // Ensure item has min/max data
+            // if (!globalMinMax[item]) return;
+            // const { min, max } = globalMinMax[item];
 
             // Clear previous legend only if min/max exist
             d3.select(legendSelector).html("");
@@ -251,8 +251,6 @@
                 .call(legendAxis);
         }
 
-
-        // tooltip
         d3.selectAll(".state")
             .on("mouseenter", function(event, d) {
                 d3.select("#tooltip")
@@ -462,8 +460,22 @@
                         d3.select("#imagesbox").html("");
                         d3.select("#imagesbox").append("h3").text("Hover over a state to see their purchase power!");
                     });
+
+                    // this is to change legend for dryer cycle
+                    let legendMin = min;
+                    let legendMax = max;
+
+                    if (item === "electricity_per_kwh") {
+                        const kwhPerDryerCycle = 3;
+                        legendMin = Math.floor(min / kwhPerDryerCycle);
+                        legendMax = Math.floor(max / kwhPerDryerCycle);
+                    }
+
+                    const colorScaleLegend = d3.scaleSequential(d3.interpolateBlues)
+                        .domain([legendMin, legendMax]);
+
                     if (shouldUpdateLegend) {
-                        drawLegend("#legend", colorScale, item);
+                        drawLegend("#legend", colorScaleLegend, legendMin, legendMax, item);
                     }
 
             });
